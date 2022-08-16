@@ -23,7 +23,6 @@ class TableBase(SQLModel):
     updated_at: datetime.datetime = Field(
         sa_column=Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
     )
-    foo: str = Field()
 
 
 class TodoTask(TableBase, table=True):
@@ -31,17 +30,3 @@ class TodoTask(TableBase, table=True):
 
     todo_at: datetime.datetime | None = Field(sa_column=Column(DateTime(timezone=True), default=None, nullable=True))
     max_retry_on_failure: int | None = Field(default=joby_settings.max_retry_on_failure, nullable=True)
-
-
-# sqlite_file_name = "database.db"
-# sqlite_url = f"sqlite:///{sqlite_file_name}"
-
-# engine = create_engine(sqlite_url, echo=True)
-
-
-# def create_db_and_tables():
-#     SQLModel.metadata.create_all(engine)
-
-
-# if __name__ == "__main__":
-#     create_db_and_tables()
