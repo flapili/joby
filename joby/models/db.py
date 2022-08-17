@@ -7,8 +7,6 @@ from sqlmodel import Field, SQLModel, Column, DateTime, func, CheckConstraint
 
 from joby.settings import get_settings
 
-# from ..settings import get_settings
-
 
 joby_settings = get_settings()
 

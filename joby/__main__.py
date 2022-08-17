@@ -4,6 +4,7 @@ import typer
 import asyncio
 import logging
 
+
 from loguru import logger
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
@@ -16,6 +17,12 @@ Select.inherit_cache = True
 
 
 app = typer.Typer(add_completion=False, pretty_exceptions_enable=False)
+
+
+@app.callback()
+def verbose_callback(verbose: bool = typer.Option(False, "--verbose", "-v")):
+    logger.remove(0)
+    logger.add(sys.stderr, level="DEBUG" if verbose else "INFO")
 
 
 class InterceptHandler(logging.Handler):
@@ -43,12 +50,41 @@ def version():
 
 
 @app.command()
-def worker():
+def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-version")):
     """Run Joby worker"""
-    # loop = asyncio.new_event_loop()
-    return
+    from alembic import config, script
+    from alembic.runtime import migration
 
-    # loop.run_until_complete(check_db())
+    from sqlalchemy.future.engine import Connection
+
+    from . import _root
+    from .db import engine
+
+    loop = asyncio.new_event_loop()
+    if check_db_version:
+
+        def check_db(conn: Connection, cfg: config.Config):
+            directory = script.ScriptDirectory.from_config(cfg)
+            context = migration.MigrationContext.configure(conn)
+            return set(context.get_current_heads()) == set(directory.get_heads())
+
+        async def run_check_db():
+            cfg = config.Config(config_args={"script_location": _root / "alembic"})
+            async with engine.begin() as conn:
+                return await conn.run_sync(check_db, cfg)
+
+        is_sync: bool = loop.run_until_complete(run_check_db())
+        if is_sync is False:
+            logger.critical("The database schema's is not sync with Joby schema's ! ABORTING !")
+            raise typer.Exit(1)
+    else:
+        # TODO: avoid crash
+        async def run():
+            async with engine.begin():
+                pass
+
+        loop.run_until_complete(run())
+
     # joby_settings = get_settings()
     # logger.opt(colors=True).info("<green>Booting Joby worker</green>")
     # _exec_module(joby_settings.jobs_file_path)
