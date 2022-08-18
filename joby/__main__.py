@@ -1,16 +1,13 @@
 # coding: utf-8
 import sys
 import typer
-import asyncio
 import logging
-
 
 from loguru import logger
 from sqlmodel.sql.expression import Select, SelectOfScalar
 
-from . import __version__ as joby_version
-from .joby import _exec_module
-from .settings import get_settings
+# from .joby import _exec_module
+# from .settings import get_settings
 
 SelectOfScalar.inherit_cache = True
 Select.inherit_cache = True
@@ -45,16 +42,28 @@ logging.basicConfig(handlers=[InterceptHandler()], level=0, force=True)
 
 @app.command()
 def version():
+    from . import __version__ as joby_version
+
     """Print the current Joby version installed"""
     print(f"Joby version: {joby_version}")
 
 
 @app.command()
+def api():
+    """TODO: implement uvicorn cli settings"""
+    import uvicorn
+
+    uvicorn.run("joby.api:app", log_config={"version": 1, "disable_existing_loggers": False})
+
+
+@app.command()
 def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-version")):
+    import asyncio
+    from pathlib import Path
+
     """Run Joby worker"""
     from sqlalchemy.future.engine import Connection
 
-    from . import _root
     from .db import engine
 
     loop = asyncio.new_event_loop()
@@ -68,7 +77,7 @@ def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-versio
             return set(context.get_current_heads()) == set(directory.get_heads())
 
         async def run_check_db():
-            cfg = config.Config(config_args={"script_location": _root / "alembic"})
+            cfg = config.Config(config_args={"script_location": Path(__file__).resolve().parent / "alembic"})
             async with engine.begin() as conn:
                 return await conn.run_sync(check_db, cfg)
 
@@ -115,12 +124,6 @@ def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-versio
         loop.run_until_complete(asyncio.gather(*running_tasks))
         print("bye bye")
 
-    # else:
-    #     # TODO: avoid crash
-    #     async def run():
-    #         async with engine.begin():
-    #             pass
-
     # loop.run_until_complete(run())
 
     # joby_settings = get_settings()
@@ -135,10 +138,12 @@ app.add_typer(dev_app, name="dev", help="Commands related to joby development")
 @dev_app.command("generate-migration-file")
 def db_generate_migration_file(message: str, autogenerate=typer.Option(True)):
     """Generate migration file (only usefull while developing this package)"""
+    import asyncio
+    from pathlib import Path
+
     from alembic import config
     import alembic.command
 
-    from . import _root
     from .db import engine
 
     def run_upgrade(connection, cfg: config.Config):
@@ -146,7 +151,7 @@ def db_generate_migration_file(message: str, autogenerate=typer.Option(True)):
         alembic.command.revision(cfg, message=message, autogenerate=autogenerate)
 
     async def run():
-        cfg = config.Config(config_args={"script_location": _root / "alembic"})
+        cfg = config.Config(config_args={"script_location": Path(__file__).resolve().parent / "alembic"})
         async with engine.begin() as conn:
             await conn.run_sync(run_upgrade, cfg)
 
@@ -160,10 +165,12 @@ app.add_typer(db_app, name="db", help="TODO:")
 @db_app.command("upgrade")
 def db_upgrade(revision: str = "head"):
     """Upgrade to a later version"""
+    import asyncio
+    from pathlib import Path
+
     from alembic import config
     import alembic.command
 
-    from . import _root
     from .db import engine
 
     def run_upgrade(connection, cfg: config.Config):
@@ -171,7 +178,7 @@ def db_upgrade(revision: str = "head"):
         alembic.command.upgrade(cfg, revision=revision)
 
     async def run():
-        cfg = config.Config(config_args={"script_location": _root / "alembic"})
+        cfg = config.Config(config_args={"script_location": Path(__file__).resolve().parent / "alembic"})
         async with engine.begin() as conn:
             await conn.run_sync(run_upgrade, cfg)
 
@@ -181,10 +188,12 @@ def db_upgrade(revision: str = "head"):
 @db_app.command("downgrade")
 def db_downgrade(revision: str):
     """Revert to a previous version"""
+    import asyncio
+    from pathlib import Path
+
     from alembic import config
     import alembic.command
 
-    from . import _root
     from .db import engine
 
     def run_upgrade(connection, cfg: config.Config):
@@ -192,7 +201,7 @@ def db_downgrade(revision: str):
         alembic.command.downgrade(cfg, revision=revision)
 
     async def run():
-        cfg = config.Config(config_args={"script_location": _root / "alembic"})
+        cfg = config.Config(config_args={"script_location": Path(__file__).resolve().parent / "alembic"})
         async with engine.begin() as conn:
             await conn.run_sync(run_upgrade, cfg)
 
