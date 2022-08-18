@@ -52,9 +52,6 @@ def version():
 @app.command()
 def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-version")):
     """Run Joby worker"""
-    from alembic import config, script
-    from alembic.runtime import migration
-
     from sqlalchemy.future.engine import Connection
 
     from . import _root
@@ -62,6 +59,8 @@ def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-versio
 
     loop = asyncio.new_event_loop()
     if check_db_version:
+        from alembic import config, script
+        from alembic.runtime import migration
 
         def check_db(conn: Connection, cfg: config.Config):
             directory = script.ScriptDirectory.from_config(cfg)
@@ -77,13 +76,52 @@ def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-versio
         if is_sync is False:
             logger.critical("The database schema's is not sync with Joby schema's ! ABORTING !")
             raise typer.Exit(1)
-    else:
-        # TODO: avoid crash
-        async def run():
-            async with engine.begin():
-                pass
 
-        loop.run_until_complete(run())
+        loop.run_until_complete(run_check_db())
+
+    async def do_job(job_id):
+
+        logger.info(f"handling task {job_id}")
+        await asyncio.sleep(2)
+        logger.info(f"task {job_id} done !")
+
+    running_tasks = set()
+    last_iteration = False
+
+    async def worker():
+        import uuid
+
+        while last_iteration is False:
+            # job = await get_job_from_db(...)
+            # job_id = job.id
+            # is_async = job.is_async
+            job_id = uuid.uuid4()
+            is_async = True
+            if is_async:
+                task = asyncio.create_task(do_job(job_id=job_id))
+            else:
+                # TODO: create t from run_in_executor
+                ...
+
+            running_tasks.add(task)
+            task.add_done_callback(running_tasks.discard)
+            await asyncio.sleep(1)
+
+    try:
+        loop.run_until_complete(worker())
+    except KeyboardInterrupt:
+        last_iteration = True
+        print("stopping, press again CTRL + C to force stop")
+        loop.run_until_complete(asyncio.gather(*running_tasks))
+        print("bye bye")
+
+    # else:
+    #     # TODO: avoid crash
+    #     async def run():
+    #         async with engine.begin():
+    #             pass
+
+    # loop.run_until_complete(run())
 
     # joby_settings = get_settings()
     # logger.opt(colors=True).info("<green>Booting Joby worker</green>")
@@ -120,7 +158,7 @@ app.add_typer(db_app, name="db", help="TODO:")
 
 
 @db_app.command("upgrade")
-def db_upgrade(revision: str):
+def db_upgrade(revision: str = "head"):
     """Upgrade to a later version"""
     from alembic import config
     import alembic.command
