@@ -62,8 +62,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    sa.DDL("DROP FUNCTION joby_delete_task;").execute(bind=op.get_bind(), target=None)
     sa.DDL("DROP TRIGGER drop_orphan_task ON joby_todo_task_parents;").execute(bind=op.get_bind(), target=None)
+    sa.DDL("DROP FUNCTION joby_delete_task;").execute(bind=op.get_bind(), target=None)
 
     op.drop_table("joby_todo_task_parents")
     op.drop_table("joby_todo_task")

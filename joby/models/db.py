@@ -40,3 +40,6 @@ class TodoTaskParent(SQLModel, table=True):
     parent_id: uuid.UUID | None = Field(
         sa_column=Column(UUID(as_uuid=True), ForeignKey("joby_todo_task.id", ondelete="CASCADE"))
     )
+    root_id: uuid.UUID = Field(
+        sa_column=Column(UUID(as_uuid=True), ForeignKey("joby_todo_task.id", ondelete="CASCADE"), nullable=False)
+    )
