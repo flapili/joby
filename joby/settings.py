@@ -6,8 +6,6 @@ from pydantic import BaseSettings, SecretStr, Field
 
 
 class Settings(BaseSettings):
-    jobs_file_path: Path = Field(..., env="JOBS_FILE_PATH")
-
     postgres_host: str = Field("localhost", env="POSTGRES_HOST")
     postgres_port: int = Field(5432, env="POSTGRES_PORT")
     postgres_user: str = Field(..., env="POSTGRES_USER")

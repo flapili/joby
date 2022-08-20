@@ -4,7 +4,10 @@ import typer
 import logging
 
 from loguru import logger
+from sqlmodel import select
 from sqlmodel.sql.expression import Select, SelectOfScalar
+
+from joby.db import get_session
 
 # from .joby import _exec_module
 # from .settings import get_settings
@@ -65,6 +68,8 @@ def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-versio
     from sqlalchemy.future.engine import Connection
 
     from .db import engine
+    from .models import db
+    from .worker import do_todo_task_wrapper
 
     loop = asyncio.new_event_loop()
     if check_db_version:
@@ -88,36 +93,37 @@ def worker(check_db_version: bool = typer.Option(True, " /--skip-check-db-versio
 
         loop.run_until_complete(run_check_db())
 
-    async def do_job(job_id):
-
-        logger.info(f"handling task {job_id}")
-        await asyncio.sleep(2)
-        logger.info(f"task {job_id} done !")
-
     running_tasks = set()
     last_iteration = False
 
-    async def worker():
-        import uuid
-
+    async def produce_try():
+        session = await get_session()
         while last_iteration is False:
-            # job = await get_job_from_db(...)
-            # job_id = job.id
-            # is_async = job.is_async
-            job_id = uuid.uuid4()
-            is_async = True
-            if is_async:
-                task = asyncio.create_task(do_job(job_id=job_id))
-            else:
-                # TODO: create t from run_in_executor
-                ...
+            async with session.begin():
+                stmt = select(db.TodoTask).limit(1)
+                todo_task: db.TodoTask | None = await session.scalar(stmt)
+                if todo_task is None:
+                    print("none")
+                    await asyncio.sleep(10)
+                    continue
 
-            running_tasks.add(task)
-            task.add_done_callback(running_tasks.discard)
-            await asyncio.sleep(1)
+                # job = await get_job_from_db(...)
+                # job_id = job.id
+                # is_async = job.is_async
+                # job_id = uuid.uuid4()
+                # is_async = True
+                # if is_async:
+                #     task = asyncio.create_task(do_job(job_id=job_id))
+                # else:
+                #     # TODO: create t from run_in_executor
+                #     ...
+                task = asyncio.create_task(do_todo_task_wrapper(todo_task.copy()))
+                running_tasks.add(task)
+                task.add_done_callback(running_tasks.discard)
+                await asyncio.sleep(1)
 
     try:
-        loop.run_until_complete(worker())
+        loop.run_until_complete(produce_try())
     except KeyboardInterrupt:
         last_iteration = True
         print("stopping, press again CTRL + C to force stop")
